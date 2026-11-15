@@ -3,131 +3,197 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mapas</title>
+  <title>Mapas y Estrategia</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, sans-serif; }
-    body { background: #121212; color: #f5f5f5; min-height: 100vh; }
+    body { background: #121212; color: #f5f5f5; min-height: 100vh; overflow-x: hidden; }
 
-    /* 1. Pantalla Principal */
+    /* Pantalla de Inicio */
     #inicio {
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      gap: 20px;
+      height: 100vh; display: flex; flex-direction: column;
+      justify-content: center; align-items: center; gap: 20px;
     }
     button {
-      background: #2563eb;
-      color: white;
-      border: none;
-      padding: 14px 36px;
-      font-size: 1.1rem;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: background 0.2s;
+      background: #2563eb; color: white; border: none; padding: 14px 36px;
+      font-size: 1.1rem; border-radius: 8px; cursor: pointer; transition: background 0.2s;
     }
     button:hover { background: #1d4ed8; }
 
-    /* 2. Vista de Mapas Guardados */
-    #galeria-vista {
-      display: none;
-      padding: 24px;
-      max-width: 1100px;
-      margin: 0 auto;
-    }
+    /* Galería de Mapas */
+    #galeria-vista { display: none; padding: 24px; max-width: 1100px; margin: 0 auto; }
     header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding-bottom: 16px;
-      border-bottom: 1px solid #333;
-      margin-bottom: 24px;
+      display: flex; justify-content: space-between; align-items: center;
+      padding-bottom: 16px; border-bottom: 1px solid #333; margin-bottom: 24px;
     }
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-      gap: 20px;
-    }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 20px; }
     .card {
-      background: #1e1e1e;
-      border-radius: 8px;
-      overflow: hidden;
-      border: 1px solid #2e2e2e;
+      background: #1e1e1e; border-radius: 8px; overflow: hidden;
+      border: 1px solid #2e2e2e; cursor: pointer; transition: transform 0.1s;
     }
-    .card img {
-      width: 100%;
-      height: 200px;
-      object-fit: cover;
-      display: block;
+    .card:hover { transform: scale(1.02); border-color: #2563eb; }
+    .card img { width: 100%; height: 200px; object-fit: cover; display: block; }
+    .card p { padding: 12px; font-size: 0.9rem; color: #ccc; }
+
+    /* Vista del Mapa Interactivo */
+    #mapa-vista { display: none; height: 100vh; position: relative; flex-direction: column; }
+    .toolbar-superior {
+      background: #1e1e1e; padding: 12px 20px; display: flex;
+      justify-content: space-between; align-items: center; border-bottom: 1px solid #333; z-index: 10;
     }
-    .card p {
-      padding: 12px;
-      font-size: 0.9rem;
-      color: #ccc;
+    .menu-container { position: relative; }
+    .menu-desplegable {
+      display: none; position: absolute; right: 0; top: 45px;
+      background: #1e1e1e; border: 1px solid #333; border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5); width: 200px; z-index: 100;
     }
-    #mensaje-vacio {
-      color: #888;
-      grid-column: 1 / -1;
-      text-align: center;
-      padding: 40px 0;
+    .menu-desplegable button {
+      display: block; width: 100%; text-align: left; background: none;
+      padding: 12px 16px; border-radius: 0; font-size: 0.95rem; border-bottom: 1px solid #2a2a2a;
     }
+    .menu-desplegable button:last-child { border-bottom: none; }
+    .menu-desplegable button:hover { background: #2a2a2a; }
+
+    .mapa-container {
+      flex: 1; position: relative; overflow: auto; background: #0a0a0a;
+      display: flex; justify-content: center; align-items: center;
+    }
+    canvas { background: #fff; cursor: crosshair; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+
+    /* Panel flotante de configuraciones */
+    .panel-config {
+      position: absolute; bottom: 20px; left: 20px; background: rgba(30,30,30,0.9);
+      padding: 15px; border-radius: 8px; border: 1px solid #333; z-index: 5;
+      font-size: 0.85rem; display: flex; flex-direction: column; gap: 8px;
+      backdrop-filter: blur(4px);
+    }
+    .panel-config label { display: flex; justify-content: space-between; gap: 15px; align-items: center; }
   </style>
 </head>
 <body>
 
   <!-- 1. Pantalla Principal -->
   <section id="inicio">
-    <h1>Mapas</h1>
+    <h1>Mapas y Estrategia</h1>
     <button id="btn-empezar">Empezar</button>
   </section>
 
-  <!-- 2. Vista de Mapas Guardados -->
+  <!-- 2. Vista de Galería -->
   <section id="galeria-vista">
     <header>
-      <h2>Mapas Guardados</h2>
+      <h2>Mapas Disponibles</h2>
     </header>
     <div class="grid" id="contenedor-mapas"></div>
   </section>
 
+  <!-- 3. Vista del Mapa Interactivo -->
+  <section id="mapa-vista">
+    <div class="toolbar-superior">
+      <h3 id="titulo-mapa-activo">Mapa</h3>
+      <div class="menu-container">
+        <button id="btn-menu">Menú ▾</button>
+        <div class="menu-desplegable" id="menu-desplegable">
+          <button id="opcion-salir">Salir al menú</button>
+          <button id="opcion-guardar">Guardar estado</button>
+          <button id="opcion-cambiar">Cambiar mapa</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="mapa-container">
+      <canvas id="lienzo-mapa"></canvas>
+    </div>
+
+    <!-- Panel de control de flechas -->
+    <div class="panel-config">
+      <strong>Flechas / Estrategia</strong>
+      <label>Color: <input type="color" id="cfg-color" value="#ef4444" style="background:none; border:none; width:30px; height:25px; cursor:pointer;"></label>
+      <label>Modo: 
+        <select id="cfg-modo" style="background:#222; color:#fff; border:1px solid #444; padding:2px 6px; border-radius:4px;">
+          <option value="seguir">Seguir</option>
+          <option value="libre">Libre</option>
+        </select>
+      </label>
+      <label>Mostrar: <input type="checkbox" id="cfg-mostrar" checked></label>
+      <label>Longitud: <select id="cfg-unidad" style="background:#222; color:#fff; border:1px solid #444; padding:2px 6px; border-radius:4px;"><option>Km/M</option><option>Mi</option></select></label>
+    </div>
+  </section>
+
   <script>
-    const btnEmpezar = document.getElementById('btn-empezar');
     const inicio = document.getElementById('inicio');
     const galeriaVista = document.getElementById('galeria-vista');
+    const mapaVista = document.getElementById('mapa-vista');
     const contenedor = document.getElementById('contenedor-mapas');
+    
+    const btnMenu = document.getElementById('btn-menu');
+    const menuDesplegable = document.getElementById('menu-desplegable');
+    const tituloMapaActivo = document.getElementById('titulo-mapa-activo');
+    
+    const lienzo = document.getElementById('lienzo-mapa');
+    const ctx = lienzo.getContext('2d');
 
-    btnEmpezar.addEventListener('click', () => {
+    let mapaActual = { nombre: '', src: '' };
+    let imagenActual = null;
+    let puntosDibujo = [];
+    let dibujando = false;
+
+    // Iniciar
+    document.getElementById('btn-empezar').addEventListener('click', () => {
       inicio.style.display = 'none';
       galeriaVista.style.display = 'block';
-      mostrarMapas();
+      cargarGaleria();
     });
 
-    async function mostrarMapas() {
-      contenedor.innerHTML = '';
-      let hayMapas = false;
+    // Menú desplegable
+    btnMenu.addEventListener('click', (e) => {
+      e.stopPropagation();
+      menuDesplegable.style.display = menuDesplegable.style.display === 'block' ? 'none' : 'block';
+    });
+    window.addEventListener('click', () => {
+      menuDesplegable.style.display = 'none';
+    });
 
-      // 1. Cargar mapas de la carpeta "Mapas" (listados en mapas.json)
+    // Opciones del Menú
+    document.getElementById('opcion-salir').addEventListener('click', () => {
+      mapaVista.style.display = 'none';
+      inicio.style.display = 'flex';
+    });
+
+    document.getElementById('opcion-cambiar').addEventListener('click', () => {
+      mapaVista.style.display = 'none';
+      galeriaVista.style.display = 'block';
+    });
+
+    // Guardar estado -> Descarga la imagen PNG con los trazos
+    document.getElementById('opcion-guardar').addEventListener('click', () => {
+      guardarEstadoEnNavegador();
+      const enlace = document.createElement('a');
+      const nombreLimpio = mapaActual.nombre.replace(/\.[^/.]+$/, '');
+      enlace.download = `estrategia_${nombreLimpio}.png`;
+      enlace.href = lienzo.toDataURL('image/png');
+      enlace.click();
+    });
+
+    function guardarEstadoEnNavegador() {
+      const estado = {
+        nombre: mapaActual.nombre,
+        dataUrl: lienzo.toDataURL('image/png'),
+        trazos: puntosDibujo
+      };
+      localStorage.setItem('estado_' + mapaActual.nombre, JSON.stringify(estado));
+    }
+
+    // Cargar galería de mapas
+    async function cargarGaleria() {
+      contenedor.innerHTML = '';
       try {
         const res = await fetch('mapas.json');
         const lista = await res.json();
         lista.forEach(ruta => {
           const nombre = ruta.split('/').pop();
           crearTarjeta(nombre, ruta);
-          hayMapas = true;
         });
       } catch (e) {
-        console.warn('No se encontró mapas.json');
-      }
-
-      // 2. Cargar mapas guardados previamente en el navegador
-      const guardados = JSON.parse(localStorage.getItem('mis_mapas') || '[]');
-      guardados.forEach(mapa => {
-        crearTarjeta(mapa.nombre, mapa.src);
-        hayMapas = true;
-      });
-
-      if (!hayMapas) {
-        contenedor.innerHTML = '<p id="mensaje-vacio">No hay mapas disponibles todavía.</p>';
+        contenedor.innerHTML = '<p style="color:#888; text-align:center; grid-column:1/-1;">No se encontró mapas.json</p>';
       }
     }
 
@@ -138,7 +204,114 @@
         <img src="${src}" alt="${titulo}" loading="lazy">
         <p>${titulo}</p>
       `;
+      card.addEventListener('click', () => abrirMapa(titulo, src));
       contenedor.appendChild(card);
+    }
+
+    // Abrir visor y restaurar trazos previos si existen
+    function abrirMapa(nombre, src) {
+      mapaActual = { nombre, src };
+      galeriaVista.style.display = 'none';
+      mapaVista.style.display = 'flex';
+      tituloMapaActivo.textContent = nombre;
+
+      const guardado = localStorage.getItem('estado_' + nombre);
+
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        imagenActual = img;
+        lienzo.width = img.width;
+        lienzo.height = img.height;
+        ctx.clearRect(0, 0, lienzo.width, lienzo.height);
+
+        if (guardado) {
+          const estado = JSON.parse(guardado);
+          puntosDibujo = estado.trazos || [];
+          const imgGuardada = new Image();
+          imgGuardada.onload = () => {
+            ctx.drawImage(imgGuardada, 0, 0);
+          };
+          imgGuardada.src = estado.dataUrl;
+        } else {
+          puntosDibujo = [];
+          ctx.drawImage(img, 0, 0);
+        }
+      };
+      img.src = src;
+    }
+
+    // Soporte para dibujar con mouse y pantalla táctil (celular/tablet)
+    function obtenerPos(e) {
+      const rect = lienzo.getBoundingClientRect();
+      const sx = lienzo.width / rect.width;
+      const sy = lienzo.height / rect.height;
+      const cx = e.touches ? e.touches[0].clientX : e.clientX;
+      const cy = e.touches ? e.touches[0].clientY : e.clientY;
+      return { x: (cx - rect.left) * sx, y: (cy - rect.top) * sy };
+    }
+
+    function iniciarDibujo(e) {
+      dibujando = true;
+      const pos = obtenerPos(e);
+      puntosDibujo.push({ tipo: 'inicio', x: pos.x, y: pos.y });
+    }
+
+    function moverDibujo(e) {
+      if (!dibujando) return;
+      if (e.cancelable) e.preventDefault();
+      const pos = obtenerPos(e);
+      puntosDibujo.push({ tipo: 'punto', x: pos.x, y: pos.y });
+      redibujarTrazos();
+    }
+
+    function terminarDibujo() {
+      if (dibujando) {
+        dibujando = false;
+        puntosDibujo.push({ tipo: 'fin' });
+        guardarEstadoEnNavegador();
+      }
+    }
+
+    lienzo.addEventListener('mousedown', iniciarDibujo);
+    lienzo.addEventListener('mousemove', moverDibujo);
+    window.addEventListener('mouseup', terminarDibujo);
+
+    lienzo.addEventListener('touchstart', iniciarDibujo, { passive: false });
+    lienzo.addEventListener('touchmove', moverDibujo, { passive: false });
+    window.addEventListener('touchend', terminarDibujo);
+
+    document.getElementById('cfg-mostrar').addEventListener('change', redibujarTrazos);
+
+    function redibujarTrazos() {
+      if (!imagenActual) return;
+      ctx.clearRect(0, 0, lienzo.width, lienzo.height);
+      ctx.drawImage(imagenActual, 0, 0);
+
+      const color = document.getElementById('cfg-color').value;
+      const mostrar = document.getElementById('cfg-mostrar').checked;
+      if (!mostrar) return;
+
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
+      ctx.lineWidth = 6;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      let dibujandoTrazo = false;
+      for (let i = 0; i < puntosDibujo.length; i++) {
+        let p = puntosDibujo[i];
+        if (p.tipo === 'inicio') {
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y);
+          dibujandoTrazo = true;
+        } else if (p.tipo === 'punto' && dibujandoTrazo) {
+          ctx.lineTo(p.x, p.y);
+          ctx.stroke();
+        } else if (p.tipo === 'fin') {
+          dibujandoTrazo = false;
+        }
+      }
     }
   </script>
 </body>
