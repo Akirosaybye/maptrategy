@@ -6,7 +6,7 @@
   <title>Mapas y Estrategia</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, sans-serif; }
-    body { background: #121212; color: #f5f5f5; min-height: 100vh; overflow-x: hidden; }
+    html, body { background: #050505; color: #f5f5f5; width: 100%; height: 100%; overflow: hidden; }
 
     /* Pantalla de Inicio */
     #inicio {
@@ -20,7 +20,7 @@
     button:hover { background: #1d4ed8; }
 
     /* Galería de Mapas */
-    #galeria-vista { display: none; padding: 24px; max-width: 1100px; margin: 0 auto; }
+    #galeria-vista { display: none; padding: 24px; max-width: 1100px; margin: 0 auto; height: 100vh; overflow-y: auto; }
     header {
       display: flex; justify-content: space-between; align-items: center;
       padding-bottom: 16px; border-bottom: 1px solid #333; margin-bottom: 24px;
@@ -34,11 +34,12 @@
     .card img { width: 100%; height: 200px; object-fit: cover; display: block; }
     .card p { padding: 12px; font-size: 0.9rem; color: #ccc; }
 
-    /* Vista del Mapa Interactivo (Espacios en gris #050505) */
+    /* Vista del Mapa Interactivo (Fondo 100% gris oscuro) */
     #mapa-vista { display: none; width: 100vw; height: 100vh; position: relative; flex-direction: column; background: #050505; }
     .toolbar-superior {
       background: #1e1e1e; padding: 12px 20px; display: flex;
       justify-content: space-between; align-items: center; border-bottom: 1px solid #333; z-index: 10;
+      flex-shrink: 0;
     }
     .menu-container { position: relative; }
     .menu-desplegable {
@@ -55,9 +56,9 @@
 
     .mapa-container {
       flex: 1; position: relative; overflow: auto; background: #050505;
-      display: flex; justify-content: center; align-items: center; width: 100%; height: calc(100vh - 60px);
+      display: flex; justify-content: center; align-items: center; width: 100%; height: 100%;
     }
-    canvas { background: #fff; cursor: crosshair; width: 100%; height: 100%; object-fit: contain; }
+    canvas { background: #050505; cursor: crosshair; display: block; max-width: 100%; max-height: 100%; object-fit: contain; }
 
     /* Panel flotante de configuraciones */
     .panel-config {
@@ -307,12 +308,10 @@
       const pos = obtenerPos(e);
 
       if (herramienta === 'nota') {
-        // Verificar si se hizo clic cerca de una nota existente para editarla
         const notaCercana = listaNotas.find(n => Math.hypot(n.x - pos.x, n.y - pos.y) < 25);
         if (notaCercana) {
           abrirModalNota(notaCercana);
         } else {
-          // Crear nueva nota
           const nuevaNota = { id: Date.now(), x: pos.x, y: pos.y, texto: '' };
           listaNotas.push(nuevaNota);
           abrirModalNota(nuevaNota);
@@ -402,7 +401,6 @@
     });
 
     document.getElementById('btn-cancelar-nota').addEventListener('click', () => {
-      // Si la nota era nueva y está vacía, se elimina
       if (notaSeleccionada && !notaSeleccionada.texto.trim()) {
         listaNotas = listaNotas.filter(n => n.id !== notaSeleccionada.id);
       }
@@ -485,7 +483,8 @@
 
     function redibujarEscena() {
       if (!imagenActual) return;
-      ctx.clearRect(0, 0, lienzo.width, lienzo.height);
+      ctx.fillStyle = '#050505';
+      ctx.fillRect(0, 0, lienzo.width, lienzo.height);
       ctx.drawImage(imagenActual, 0, 0);
 
       const mostrar = document.getElementById('cfg-mostrar').checked;
