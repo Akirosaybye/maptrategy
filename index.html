@@ -34,7 +34,7 @@
     .card img { width: 100%; height: 200px; object-fit: cover; display: block; }
     .card p { padding: 12px; font-size: 0.9rem; color: #ccc; }
 
-    /* Vista del Mapa Interactivo (Fondo 100% gris oscuro) */
+    /* Vista del Mapa Interactivo (Fondo 100% gris oscuro sin blancos) */
     #mapa-vista { display: none; width: 100vw; height: 100vh; position: relative; flex-direction: column; background: #050505; }
     .toolbar-superior {
       background: #1e1e1e; padding: 12px 20px; display: flex;
@@ -71,17 +71,20 @@
     .btn-borrar-todo { background: #dc2626; font-size: 0.85rem; padding: 8px; border-radius: 6px; width: 100%; border: none; color: #fff; cursor: pointer; }
     .btn-borrar-todo:hover { background: #b91c1c; }
 
-    /* Cuadro de diálogo flotante para Notas */
+    /* Cuadro de diálogo flotante para Notas (Título y Descripción) */
     #modal-nota {
       display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
       background: #1e1e1e; border: 1px solid #444; padding: 20px; border-radius: 10px;
-      z-index: 1000; box-shadow: 0 10px 30px rgba(0,0,0,0.8); width: 300px;
+      z-index: 1000; box-shadow: 0 10px 30px rgba(0,0,0,0.8); width: 320px;
     }
-    #modal-nota h4 { margin-bottom: 10px; font-size: 1rem; color: #fff; }
-    #modal-nota textarea {
-      width: 100%; height: 90px; background: #111; color: #fff; border: 1px solid #333;
-      padding: 8px; border-radius: 6px; resize: none; margin-bottom: 12px; font-family: sans-serif;
+    #modal-nota h4 { margin-bottom: 12px; font-size: 1.1rem; color: #fff; }
+    #modal-nota label { font-size: 0.8rem; color: #aaa; display: block; margin-bottom: 4px; }
+    #modal-nota input[type="text"], #modal-nota textarea {
+      width: 100%; background: #111; color: #fff; border: 1px solid #333;
+      padding: 8px; border-radius: 6px; font-family: sans-serif; margin-bottom: 12px;
     }
+    #modal-nota input[type="text"] { font-size: 0.95rem; }
+    #modal-nota textarea { height: 80px; resize: none; font-size: 0.9rem; }
     .modal-botones { display: flex; gap: 8px; justify-content: flex-end; }
     .modal-botones button { padding: 6px 12px; font-size: 0.85rem; border-radius: 6px; cursor: pointer; }
     .btn-guardar-nota { background: #2563eb; color: #fff; border: none; }
@@ -146,10 +149,13 @@
     </div>
   </section>
 
-  <!-- Modal para editar notas -->
+  <!-- Modal para editar Título y Descripción de la Nota -->
   <div id="modal-nota">
-    <h4>Editar Nota</h4>
-    <textarea id="texto-nota" placeholder="Escribe tu nota aquí..."></textarea>
+    <h4>Gestionar Nota</h4>
+    <label>Título (visible en el mapa):</label>
+    <input type="text" id="input-titulo-nota" placeholder="Ej: Base enemiga">
+    <label>Descripción (dentro del globo):</label>
+    <textarea id="input-desc-nota" placeholder="Detalles estratégicos..."></textarea>
     <div class="modal-botones">
       <button class="btn-borrar-nota" id="btn-eliminar-nota">Borrar</button>
       <button class="btn-cancelar-nota" id="btn-cancelar-nota">Cancelar</button>
@@ -171,7 +177,8 @@
     const ctx = lienzo.getContext('2d');
 
     const modalNota = document.getElementById('modal-nota');
-    const inputTextoNota = document.getElementById('texto-nota');
+    const inputTituloNota = document.getElementById('input-titulo-nota');
+    const inputDescNota = document.getElementById('input-desc-nota');
 
     let mapaActual = { nombre: '', src: '' };
     let imagenActual = null;
@@ -277,7 +284,8 @@
         imagenActual = img;
         lienzo.width = img.naturalWidth || img.width;
         lienzo.height = img.naturalHeight || img.height;
-        ctx.clearRect(0, 0, lienzo.width, lienzo.height);
+        ctx.fillStyle = '#050505';
+        ctx.fillRect(0, 0, lienzo.width, lienzo.height);
 
         if (guardado) {
           const estado = JSON.parse(guardado);
@@ -312,7 +320,7 @@
         if (notaCercana) {
           abrirModalNota(notaCercana);
         } else {
-          const nuevaNota = { id: Date.now(), x: pos.x, y: pos.y, texto: '' };
+          const nuevaNota = { id: Date.now(), x: pos.x, y: pos.y, titulo: 'Nota', descripcion: '' };
           listaNotas.push(nuevaNota);
           abrirModalNota(nuevaNota);
         }
@@ -386,14 +394,16 @@
 
     function abrirModalNota(nota) {
       notaSeleccionada = nota;
-      inputTextoNota.value = nota.texto;
+      inputTituloNota.value = nota.titulo;
+      inputDescNota.value = nota.descripcion;
       modalNota.style.display = 'block';
-      inputTextoNota.focus();
+      inputTituloNota.focus();
     }
 
     document.getElementById('btn-guardar-nota').addEventListener('click', () => {
       if (notaSeleccionada) {
-        notaSeleccionada.texto = inputTextoNota.value;
+        notaSeleccionada.titulo = inputTituloNota.value.trim() || 'Nota';
+        notaSeleccionada.descripcion = inputDescNota.value;
       }
       modalNota.style.display = 'none';
       redibujarEscena();
@@ -401,7 +411,7 @@
     });
 
     document.getElementById('btn-cancelar-nota').addEventListener('click', () => {
-      if (notaSeleccionada && !notaSeleccionada.texto.trim()) {
+      if (notaSeleccionada && !notaSeleccionada.titulo && !notaSeleccionada.descripcion) {
         listaNotas = listaNotas.filter(n => n.id !== notaSeleccionada.id);
       }
       modalNota.style.display = 'none';
@@ -419,7 +429,7 @@
 
     document.getElementById('cfg-mostrar').addEventListener('change', redibujarEscena);
 
-    // Funciones de renderizado
+    // Funciones de renderizado de flechas
     function dibujarFlechaRecta(c, x1, y1, x2, y2, color, grosor) {
       const headlen = grosor * 4 + 10;
       const angle = Math.atan2(y2 - y1, x2 - x1);
@@ -501,7 +511,7 @@
         }
       });
 
-      // Dibujar puntos de notas
+      // Dibujar puntos de notas (Título visible por fuera, descripción oculta dentro del modal)
       listaNotas.forEach(n => {
         ctx.beginPath();
         ctx.arc(n.x, n.y, 8, 0, Math.PI * 2);
@@ -511,13 +521,13 @@
         ctx.strokeStyle = '#ffffff';
         ctx.stroke();
 
-        if (n.texto) {
+        if (n.titulo) {
           ctx.font = 'bold 14px sans-serif';
           ctx.fillStyle = '#ffffff';
           ctx.strokeStyle = '#000000';
           ctx.lineWidth = 3;
-          ctx.strokeText(n.texto, n.x + 12, n.y + 5);
-          ctx.fillText(n.texto, n.x + 12, n.y + 5);
+          ctx.strokeText(n.titulo, n.x + 12, n.y + 5);
+          ctx.fillText(n.titulo, n.x + 12, n.y + 5);
         }
       });
     }
