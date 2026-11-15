@@ -105,16 +105,10 @@
 
     <!-- Panel de control de flechas -->
     <div class="panel-config">
-      <strong>Flechas / Estrategia</strong>
+      <strong>Herramienta: Flechas Tácticas</strong>
       <label>Color: <input type="color" id="cfg-color" value="#ef4444" style="background:none; border:none; width:30px; height:25px; cursor:pointer;"></label>
-      <label>Modo: 
-        <select id="cfg-modo" style="background:#222; color:#fff; border:1px solid #444; padding:2px 6px; border-radius:4px;">
-          <option value="seguir">Seguir</option>
-          <option value="libre">Libre</option>
-        </select>
-      </label>
       <label>Mostrar: <input type="checkbox" id="cfg-mostrar" checked></label>
-      <label>Longitud: <select id="cfg-unidad" style="background:#222; color:#fff; border:1px solid #444; padding:2px 6px; border-radius:4px;"><option>Km/M</option><option>Mi</option></select></label>
+      <span style="font-size:0.75rem; color:#aaa; margin-top:4px;">* Arrastra para trazar una flecha</span>
     </div>
   </section>
 
@@ -133,8 +127,10 @@
 
     let mapaActual = { nombre: '', src: '' };
     let imagenActual = null;
-    let puntosDibujo = [];
-    let dibujando = false;
+    let listaFlechas = [];
+    let arrastrando = false;
+    let inicioX = 0, inicioY = 0;
+    let actualX = 0, actualY = 0;
 
     // Iniciar
     document.getElementById('btn-empezar').addEventListener('click', () => {
@@ -163,7 +159,7 @@
       galeriaVista.style.display = 'block';
     });
 
-    // Guardar estado -> Descarga la imagen PNG con los trazos
+    // Guardar estado -> Descarga la imagen PNG con las flechas
     document.getElementById('opcion-guardar').addEventListener('click', () => {
       guardarEstadoEnNavegador();
       const enlace = document.createElement('a');
@@ -177,7 +173,7 @@
       const estado = {
         nombre: mapaActual.nombre,
         dataUrl: lienzo.toDataURL('image/png'),
-        trazos: puntosDibujo
+        flechas: listaFlechas
       };
       localStorage.setItem('estado_' + mapaActual.nombre, JSON.stringify(estado));
     }
@@ -208,7 +204,7 @@
       contenedor.appendChild(card);
     }
 
-    // Abrir visor y restaurar trazos previos si existen
+    // Abrir visor y restaurar flechas previas si existen
     function abrirMapa(nombre, src) {
       mapaActual = { nombre, src };
       galeriaVista.style.display = 'none';
@@ -227,21 +223,21 @@
 
         if (guardado) {
           const estado = JSON.parse(guardado);
-          puntosDibujo = estado.trazos || [];
+          listaFlechas = estado.flechas || [];
           const imgGuardada = new Image();
           imgGuardada.onload = () => {
             ctx.drawImage(imgGuardada, 0, 0);
           };
           imgGuardada.src = estado.dataUrl;
         } else {
-          puntosDibujo = [];
+          listaFlechas = [];
           ctx.drawImage(img, 0, 0);
         }
       };
       img.src = src;
     }
 
-    // Soporte para dibujar con mouse y pantalla táctil (celular/tablet)
+    // Coordenadas exactas para el canvas
     function obtenerPos(e) {
       const rect = lienzo.getBoundingClientRect();
       const sx = lienzo.width / rect.width;
@@ -251,67 +247,87 @@
       return { x: (cx - rect.left) * sx, y: (cy - rect.top) * sy };
     }
 
-    function iniciarDibujo(e) {
-      dibujando = true;
+    function iniciarArrastre(e) {
+      arrastrando = true;
       const pos = obtenerPos(e);
-      puntosDibujo.push({ tipo: 'inicio', x: pos.x, y: pos.y });
+      inicioX = pos.x;
+      inicioY = pos.y;
+      actualX = pos.x;
+      actualY = pos.y;
     }
 
-    function moverDibujo(e) {
-      if (!dibujando) return;
+    function moverArrastre(e) {
+      if (!arrastrando) return;
       if (e.cancelable) e.preventDefault();
       const pos = obtenerPos(e);
-      puntosDibujo.push({ tipo: 'punto', x: pos.x, y: pos.y });
-      redibujarTrazos();
-    }
-
-    function terminarDibujo() {
-      if (dibujando) {
-        dibujando = false;
-        puntosDibujo.push({ tipo: 'fin' });
-        guardarEstadoEnNavegador();
+      actualX = pos.x;
+      actualY = pos.y;
+      redibujarEscena();
+      // Dibujar flecha temporal mientras arrastras
+      const color = document.getElementById('cfg-color').value;
+      if (document.getElementById('cfg-mostrar').checked) {
+        dibujarFlecha(ctx, inicioX, inicioY, actualX, actualY, color);
       }
     }
 
-    lienzo.addEventListener('mousedown', iniciarDibujo);
-    lienzo.addEventListener('mousemove', moverDibujo);
-    window.addEventListener('mouseup', terminarDibujo);
+    function terminarArrastre() {
+      if (!arrastrando) return;
+      arrastrando = false;
+      const color = document.getElementById('cfg-color').value;
+      // Guardar la flecha definitiva en la lista
+      listaFlechas.push({ x1: inicioX, y1: inicioY, x2: actualX, y2: actualY, color: color });
+      redibujarEscena();
+      guardarEstadoEnNavegador();
+    }
 
-    lienzo.addEventListener('touchstart', iniciarDibujo, { passive: false });
-    lienzo.addEventListener('touchmove', moverDibujo, { passive: false });
-    window.addEventListener('touchend', terminarDibujo);
+    lienzo.addEventListener('mousedown', iniciarArrastre);
+    lienzo.addEventListener('mousemove', moverArrastre);
+    window.addEventListener('mouseup', terminarArrastre);
 
-    document.getElementById('cfg-mostrar').addEventListener('change', redibujarTrazos);
+    lienzo.addEventListener('touchstart', iniciarArrastre, { passive: false });
+    lienzo.addEventListener('touchmove', moverArrastre, { passive: false });
+    window.addEventListener('touchend', terminarArrastre);
 
-    function redibujarTrazos() {
+    document.getElementById('cfg-mostrar').addEventListener('change', redibujarEscena);
+
+    // Función matemática para pintar una flecha táctica perfecta
+    function dibujarffes(context, x1, y1, x2, y2, color) {} // placeholder
+    function dibujarFlecha(c, x1, y1, x2, y2, color) {
+      const headlen = 25; // Longitud de la punta de la flecha
+      const angle = Math.atan2(y2 - y1, x2 - x1);
+
+      c.strokeStyle = color;
+      c.fillStyle = color;
+      c.lineWidth = 6;
+      c.lineCap = 'round';
+
+      // Línea principal
+      c.beginPath();
+      c.moveTo(x1, y1);
+      c.lineTo(x2, y2);
+      c.stroke();
+
+      // Cabeza de la flecha
+      c.beginPath();
+      c.moveTo(x2, y2);
+      c.lineTo(x2 - headlen * Math.cos(angle - Math.PI / 6), y2 - headlen * Math.sin(angle - Math.PI / 6));
+      c.lineTo(x2 - headlen * Math.cos(angle + Math.PI / 6), y2 - headlen * Math.sin(angle + Math.PI / 6));
+      c.lineTo(x2, y2);
+      c.fill();
+    }
+
+    function redibujarEscena() {
       if (!imagenActual) return;
       ctx.clearRect(0, 0, lienzo.width, lienzo.height);
       ctx.drawImage(imagenActual, 0, 0);
 
-      const color = document.getElementById('cfg-color').value;
       const mostrar = document.getElementById('cfg-mostrar').checked;
       if (!mostrar) return;
 
-      ctx.strokeStyle = color;
-      ctx.fillStyle = color;
-      ctx.lineWidth = 6;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-
-      let dibujandoTrazo = false;
-      for (let i = 0; i < puntosDibujo.length; i++) {
-        let p = puntosDibujo[i];
-        if (p.tipo === 'inicio') {
-          ctx.beginPath();
-          ctx.moveTo(p.x, p.y);
-          dibujandoTrazo = true;
-        } else if (p.tipo === 'punto' && dibujandoTrazo) {
-          ctx.lineTo(p.x, p.y);
-          ctx.stroke();
-        } else if (p.tipo === 'fin') {
-          dibujandoTrazo = false;
-        }
-      }
+      // Redibujar todas las flechas guardadas
+      listaFlechas.forEach(f => {
+        dibujarFlecha(ctx, f.x1, f.y1, f.x2, f.y2, f.color);
+      });
     }
   </script>
 </body>
