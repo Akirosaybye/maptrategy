@@ -34,8 +34,8 @@
     .card img { width: 100%; height: 200px; object-fit: cover; display: block; }
     .card p { padding: 12px; font-size: 0.9rem; color: #ccc; }
 
-    /* Vista del Mapa Interactivo (Pantalla completa) */
-    #mapa-vista { display: none; width: 100vw; height: 100vh; position: relative; flex-direction: column; }
+    /* Vista del Mapa Interactivo (Espacios en gris #050505) */
+    #mapa-vista { display: none; width: 100vw; height: 100vh; position: relative; flex-direction: column; background: #050505; }
     .toolbar-superior {
       background: #1e1e1e; padding: 12px 20px; display: flex;
       justify-content: space-between; align-items: center; border-bottom: 1px solid #333; z-index: 10;
@@ -64,11 +64,28 @@
       position: absolute; bottom: 20px; left: 20px; background: rgba(30,30,30,0.95);
       padding: 15px; border-radius: 8px; border: 1px solid #333; z-index: 5;
       font-size: 0.85rem; display: flex; flex-direction: column; gap: 10px;
-      backdrop-filter: blur(4px); min-width: 200px;
+      backdrop-filter: blur(4px); min-width: 210px; color: #fff;
     }
     .panel-config label { display: flex; justify-content: space-between; gap: 15px; align-items: center; }
-    .btn-borrar-todo { background: #dc2626; font-size: 0.85rem; padding: 8px; border-radius: 6px; width: 100%; }
+    .btn-borrar-todo { background: #dc2626; font-size: 0.85rem; padding: 8px; border-radius: 6px; width: 100%; border: none; color: #fff; cursor: pointer; }
     .btn-borrar-todo:hover { background: #b91c1c; }
+
+    /* Cuadro de diálogo flotante para Notas */
+    #modal-nota {
+      display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      background: #1e1e1e; border: 1px solid #444; padding: 20px; border-radius: 10px;
+      z-index: 1000; box-shadow: 0 10px 30px rgba(0,0,0,0.8); width: 300px;
+    }
+    #modal-nota h4 { margin-bottom: 10px; font-size: 1rem; color: #fff; }
+    #modal-nota textarea {
+      width: 100%; height: 90px; background: #111; color: #fff; border: 1px solid #333;
+      padding: 8px; border-radius: 6px; resize: none; margin-bottom: 12px; font-family: sans-serif;
+    }
+    .modal-botones { display: flex; gap: 8px; justify-content: flex-end; }
+    .modal-botones button { padding: 6px 12px; font-size: 0.85rem; border-radius: 6px; cursor: pointer; }
+    .btn-guardar-nota { background: #2563eb; color: #fff; border: none; }
+    .btn-cancelar-nota { background: #333; color: #fff; border: none; }
+    .btn-borrar-nota { background: #dc2626; color: #fff; border: none; }
   </style>
 </head>
 <body>
@@ -105,20 +122,39 @@
       <canvas id="lienzo-mapa"></canvas>
     </div>
 
-    <!-- Panel de control de flechas -->
+    <!-- Panel de control de trazado y notas -->
     <div class="panel-config">
-      <strong>Controles de Trazado</strong>
+      <strong>Controles</strong>
+      <label>Herramienta: 
+        <select id="cfg-herramienta" style="background:#222; color:#fff; border:1px solid #444; padding:3px 6px; border-radius:4px;">
+          <option value="recta">Flecha Recta</option>
+          <option value="seguir">Flecha Seguir</option>
+          <option value="nota">Notas (Puntos)</option>
+        </select>
+      </label>
       <label>Color: <input type="color" id="cfg-color" value="#ef4444" style="background:none; border:none; width:30px; height:25px; cursor:pointer;"></label>
-      <label>Modo: 
-        <select id="cfg-modo" style="background:#222; color:#fff; border:1px solid #444; padding:3px 6px; border-radius:4px;">
-          <option value="recta">Recta</option>
-          <option value="seguir">Seguir</option>
+      <label>Tamaño Línea: 
+        <select id="cfg-grosor" style="background:#222; color:#fff; border:1px solid #444; padding:3px 6px; border-radius:4px;">
+          <option value="4">Fino</option>
+          <option value="6" selected>Normal</option>
+          <option value="10">Grueso</option>
         </select>
       </label>
       <label>Mostrar: <input type="checkbox" id="cfg-mostrar" checked></label>
       <button class="btn-borrar-todo" id="btn-borrar-todo">Borrar Todo</button>
     </div>
   </section>
+
+  <!-- Modal para editar notas -->
+  <div id="modal-nota">
+    <h4>Editar Nota</h4>
+    <textarea id="texto-nota" placeholder="Escribe tu nota aquí..."></textarea>
+    <div class="modal-botones">
+      <button class="btn-borrar-nota" id="btn-eliminar-nota">Borrar</button>
+      <button class="btn-cancelar-nota" id="btn-cancelar-nota">Cancelar</button>
+      <button class="btn-guardar-nota" id="btn-guardar-nota">Guardar</button>
+    </div>
+  </div>
 
   <script>
     const inicio = document.getElementById('inicio');
@@ -133,11 +169,17 @@
     const lienzo = document.getElementById('lienzo-mapa');
     const ctx = lienzo.getContext('2d');
 
+    const modalNota = document.getElementById('modal-nota');
+    const inputTextoNota = document.getElementById('texto-nota');
+
     let mapaActual = { nombre: '', src: '' };
     let imagenActual = null;
     let listaFlechas = [];
+    let listaNotas = [];
     let dibujando = false;
     let trazoActual = [];
+    let notaSeleccionada = null;
+    let mouseX = 0, mouseY = 0;
 
     // Iniciar
     document.getElementById('btn-empezar').addEventListener('click', () => {
@@ -176,8 +218,9 @@
     });
 
     document.getElementById('btn-borrar-todo').addEventListener('click', () => {
-      if (!confirm('¿Seguro que deseas borrar todas las flechas de este mapa?')) return;
+      if (!confirm('¿Seguro que deseas borrar todas las flechas y notas de este mapa?')) return;
       listaFlechas = [];
+      listaNotas = [];
       redibujarEscena();
       guardarEstadoEnNavegador();
     });
@@ -186,7 +229,8 @@
       const estado = {
         nombre: mapaActual.nombre,
         dataUrl: lienzo.toDataURL('image/png'),
-        flechas: listaFlechas
+        flechas: listaFlechas,
+        notas: listaNotas
       };
       localStorage.setItem('estado_' + mapaActual.nombre, JSON.stringify(estado));
     }
@@ -217,7 +261,7 @@
       contenedor.appendChild(card);
     }
 
-    // Abrir visor y ajustar dimensiones reales de la imagen para máxima nitidez
+    // Abrir visor y ajustar dimensiones reales
     function abrirMapa(nombre, src) {
       mapaActual = { nombre, src };
       galeriaVista.style.display = 'none';
@@ -237,9 +281,11 @@
         if (guardado) {
           const estado = JSON.parse(guardado);
           listaFlechas = estado.flechas || [];
+          listaNotas = estado.notas || [];
           redibujarEscena();
         } else {
           listaFlechas = [];
+          listaNotas = [];
           ctx.drawImage(img, 0, 0);
         }
       };
@@ -257,40 +303,64 @@
     }
 
     function iniciarDibujo(e) {
-      dibujando = true;
+      const herramienta = document.getElementById('cfg-herramienta').value;
       const pos = obtenerPos(e);
+
+      if (herramienta === 'nota') {
+        // Verificar si se hizo clic cerca de una nota existente para editarla
+        const notaCercana = listaNotas.find(n => Math.hypot(n.x - pos.x, n.y - pos.y) < 25);
+        if (notaCercana) {
+          abrirModalNota(notaCercana);
+        } else {
+          // Crear nueva nota
+          const nuevaNota = { id: Date.now(), x: pos.x, y: pos.y, texto: '' };
+          listaNotas.push(nuevaNota);
+          abrirModalNota(nuevaNota);
+        }
+        redibujarEscena();
+        return;
+      }
+
+      dibujando = true;
       trazoActual = [pos];
     }
 
     function moverDibujo(e) {
-      if (!dibujando) return;
-      if (e.cancelable) e.preventDefault();
+      const herramienta = document.getElementById('cfg-herramienta').value;
       const pos = obtenerPos(e);
+      mouseX = pos.x;
+      mouseY = pos.y;
+
+      if (!dibujando || herramienta === 'nota') return;
+      if (e.cancelable) e.preventDefault();
+      
       trazoActual.push(pos);
       redibujarEscena();
 
-      const modo = document.getElementById('cfg-modo').value;
       const color = document.getElementById('cfg-color').value;
+      const grosor = parseInt(document.getElementById('cfg-grosor').value);
       const mostrar = document.getElementById('cfg-mostrar').checked;
 
       if (!mostrar) return;
 
-      if (modo === 'recta' && trazoActual.length >= 2) {
+      if (herramienta === 'recta' && trazoActual.length >= 2) {
         const inicio = trazoActual[0];
         const actual = trazoActual[trazoActual.length - 1];
-        dibujarFlechaRecta(ctx, inicio.x, inicio.y, actual.x, actual.y, color);
-      } else if (modo === 'seguir' && trazoActual.length >= 2) {
-        dibujarFlechaSeguir(ctx, trazoActual, color);
+        dibujarFlechaRecta(ctx, inicio.x, inicio.y, actual.x, actual.y, color, grosor);
+      } else if (herramienta === 'seguir' && trazoActual.length >= 2) {
+        dibujarFlechaSeguir(ctx, trazoActual, color, grosor);
       }
     }
 
     function terminarDibujo() {
-      if (!dibujando) return;
+      const herramienta = document.getElementById('cfg-herramienta').value;
+      if (!dibujando || herramienta === 'nota') return;
+      
       dibujando = false;
       if (trazoActual.length >= 2) {
-        const modo = document.getElementById('cfg-modo').value;
         const color = document.getElementById('cfg-color').value;
-        listaFlechas.push({ modo, puntos: [...trazoActual], color });
+        const grosor = parseInt(document.getElementById('cfg-grosor').value);
+        listaFlechas.push({ modo: herramienta, puntos: [...trazoActual], color, grosor });
       }
       trazoActual = [];
       redibujarEscena();
@@ -305,16 +375,60 @@
     lienzo.addEventListener('touchmove', moverDibujo, { passive: false });
     window.addEventListener('touchend', terminarDibujo);
 
+    // Tecla 'E' para abrir la nota bajo el cursor
+    window.addEventListener('keydown', (e) => {
+      if (e.key.toLowerCase() === 'e' && document.getElementById('cfg-herramienta').value === 'nota') {
+        const notaCercana = listaNotas.find(n => Math.hypot(n.x - mouseX, n.y - mouseY) < 35);
+        if (notaCercana) {
+          abrirModalNota(notaCercana);
+        }
+      }
+    });
+
+    function abrirModalNota(nota) {
+      notaSeleccionada = nota;
+      inputTextoNota.value = nota.texto;
+      modalNota.style.display = 'block';
+      inputTextoNota.focus();
+    }
+
+    document.getElementById('btn-guardar-nota').addEventListener('click', () => {
+      if (notaSeleccionada) {
+        notaSeleccionada.texto = inputTextoNota.value;
+      }
+      modalNota.style.display = 'none';
+      redibujarEscena();
+      guardarEstadoEnNavegador();
+    });
+
+    document.getElementById('btn-cancelar-nota').addEventListener('click', () => {
+      // Si la nota era nueva y está vacía, se elimina
+      if (notaSeleccionada && !notaSeleccionada.texto.trim()) {
+        listaNotas = listaNotas.filter(n => n.id !== notaSeleccionada.id);
+      }
+      modalNota.style.display = 'none';
+      redibujarEscena();
+    });
+
+    document.getElementById('btn-eliminar-nota').addEventListener('click', () => {
+      if (notaSeleccionada) {
+        listaNotas = listaNotas.filter(n => n.id !== notaSeleccionada.id);
+      }
+      modalNota.style.display = 'none';
+      redibujarEscena();
+      guardarEstadoEnNavegador();
+    });
+
     document.getElementById('cfg-mostrar').addEventListener('change', redibujarEscena);
 
-    // Funciones de renderizado de flechas (puntiagudas y sin bulto)
-    function dibujarFlechaRecta(c, x1, y1, x2, y2, color) {
-      const headlen = 26;
+    // Funciones de renderizado
+    function dibujarFlechaRecta(c, x1, y1, x2, y2, color, grosor) {
+      const headlen = grosor * 4 + 10;
       const angle = Math.atan2(y2 - y1, x2 - x1);
 
       c.strokeStyle = color;
       c.fillStyle = color;
-      c.lineWidth = 6;
+      c.lineWidth = grosor;
       c.lineCap = 'butt';
 
       const lineaFinX = x2 - (headlen * 0.7) * Math.cos(angle);
@@ -333,9 +447,9 @@
       c.fill();
     }
 
-    function dibujarFlechaSeguir(c, puntos, color) {
+    function dibujarFlechaSeguir(c, puntos, color, grosor) {
       if (puntos.length < 2) return;
-      const headlen = 26;
+      const headlen = grosor * 4 + 10;
       const pUlt = puntos[puntos.length - 1];
 
       let idxRef = puntos.length - 2;
@@ -347,7 +461,7 @@
 
       c.strokeStyle = color;
       c.fillStyle = color;
-      c.lineWidth = 6;
+      c.lineWidth = grosor;
       c.lineCap = 'butt';
       c.lineJoin = 'round';
 
@@ -377,13 +491,34 @@
       const mostrar = document.getElementById('cfg-mostrar').checked;
       if (!mostrar) return;
 
+      // Dibujar flechas
       listaFlechas.forEach(f => {
         if (f.modo === 'recta' && f.puntos.length >= 2) {
           const p1 = f.puntos[0];
           const p2 = f.puntos[f.puntos.length - 1];
-          dibujarFlechaRecta(ctx, p1.x, p1.y, p2.x, p2.y, f.color);
+          dibujarFlechaRecta(ctx, p1.x, p1.y, p2.x, p2.y, f.color, f.grosor || 6);
         } else if (f.modo === 'seguir' && f.puntos.length >= 2) {
-          dibujarFlechaSeguir(ctx, f.puntos, f.color);
+          dibujarFlechaSeguir(ctx, f.puntos, f.color, f.grosor || 6);
+        }
+      });
+
+      // Dibujar puntos de notas
+      listaNotas.forEach(n => {
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, 8, 0, Math.PI * 2);
+        ctx.fillStyle = '#2563eb';
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#ffffff';
+        ctx.stroke();
+
+        if (n.texto) {
+          ctx.font = 'bold 14px sans-serif';
+          ctx.fillStyle = '#ffffff';
+          ctx.strokeStyle = '#000000';
+          ctx.lineWidth = 3;
+          ctx.strokeText(n.texto, n.x + 12, n.y + 5);
+          ctx.fillText(n.texto, n.x + 12, n.y + 5);
         }
       });
     }
