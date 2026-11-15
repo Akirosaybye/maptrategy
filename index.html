@@ -34,7 +34,7 @@
     .card img { width: 100%; height: 200px; object-fit: cover; display: block; }
     .card p { padding: 12px; font-size: 0.9rem; color: #ccc; }
 
-    /* Vista del Mapa Interactivo (Fondo 100% gris oscuro sin blancos) */
+    /* Vista del Mapa Interactivo (Fondo 100% gris oscuro) */
     #mapa-vista { display: none; width: 100vw; height: 100vh; position: relative; flex-direction: column; background: #050505; }
     .toolbar-superior {
       background: #1e1e1e; padding: 12px 20px; display: flex;
@@ -71,7 +71,7 @@
     .btn-borrar-todo { background: #dc2626; font-size: 0.85rem; padding: 8px; border-radius: 6px; width: 100%; border: none; color: #fff; cursor: pointer; }
     .btn-borrar-todo:hover { background: #b91c1c; }
 
-    /* Cuadro de diálogo flotante para Notas (Título y Descripción) */
+    /* Cuadro de diálogo flotante para Notas */
     #modal-nota {
       display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
       background: #1e1e1e; border: 1px solid #444; padding: 20px; border-radius: 10px;
@@ -139,9 +139,9 @@
       <label>Color: <input type="color" id="cfg-color" value="#ef4444" style="background:none; border:none; width:30px; height:25px; cursor:pointer;"></label>
       <label>Tamaño Línea: 
         <select id="cfg-grosor" style="background:#222; color:#fff; border:1px solid #444; padding:3px 6px; border-radius:4px;">
-          <option value="4">Fino</option>
-          <option value="6" selected>Normal</option>
-          <option value="10">Grueso</option>
+          <option value="12">Fino</option>
+          <option value="20" selected>Normal</option>
+          <option value="32">Grueso</option>
         </select>
       </label>
       <label>Mostrar: <input type="checkbox" id="cfg-mostrar" checked></label>
@@ -353,9 +353,9 @@
       if (herramienta === 'recta' && trazoActual.length >= 2) {
         const inicio = trazoActual[0];
         const actual = trazoActual[trazoActual.length - 1];
-        dibujarFlechaRecta(ctx, inicio.x, inicio.y, actual.x, actual.y, color, grosor);
+        dibujarFlechaEstiloFoto(ctx, [inicio, actual], color, grosor);
       } else if (herramienta === 'seguir' && trazoActual.length >= 2) {
-        dibujarFlechaSeguir(ctx, trazoActual, color, grosor);
+        dibujarFlechaEstiloFoto(ctx, trazoActual, color, grosor);
       }
     }
 
@@ -429,64 +429,69 @@
 
     document.getElementById('cfg-mostrar').addEventListener('change', redibujarEscena);
 
-    // Funciones de renderizado de flechas
-    function dibujarFlechaRecta(c, x1, y1, x2, y2, color, grosor) {
-      const headlen = grosor * 4 + 10;
-      const angle = Math.atan2(y2 - y1, x2 - x1);
-
-      c.strokeStyle = color;
-      c.fillStyle = color;
-      c.lineWidth = grosor;
-      c.lineCap = 'butt';
-
-      const lineaFinX = x2 - (headlen * 0.7) * Math.cos(angle);
-      const lineaFinY = y2 - (headlen * 0.7) * Math.sin(angle);
-
-      c.beginPath();
-      c.moveTo(x1, y1);
-      c.lineTo(lineaFinX, lineaFinY);
-      c.stroke();
-
-      c.beginPath();
-      c.moveTo(x2, y2);
-      c.lineTo(x2 - headlen * Math.cos(angle - Math.PI / 7), y2 - headlen * Math.sin(angle - Math.PI / 7));
-      c.lineTo(x2 - headlen * Math.cos(angle + Math.PI / 7), y2 - headlen * Math.sin(angle + Math.PI / 7));
-      c.closePath();
-      c.fill();
-    }
-
-    function dibujarFlechaSeguir(c, puntos, color, grosor) {
+    // --- NUEVO DISEÑO DE FLECHA BASADO EN LA FOTO ---
+    function dibujarFlechaEstiloFoto(c, puntos, color, grosor) {
       if (puntos.length < 2) return;
-      const headlen = grosor * 4 + 10;
-      const pUlt = puntos[puntos.length - 1];
 
-      let idxRef = puntos.length - 2;
-      while (idxRef > 0 && Math.hypot(pUlt.x - puntos[idxRef].x, pUlt.y - puntos[idxRef].y) < 18) {
-        idxRef--;
+      const pInicio = puntos[0];
+      const pFin = puntos[puntos.length - 1];
+
+      // Referencia para calcular el ángulo de la punta (usando los últimos puntos para modo seguir o inicio/fin para recta)
+      let pRef = puntos[0];
+      if (puntos.length > 2) {
+        let idx = puntos.length - 2;
+        while (idx > 0 && Math.hypot(pFin.x - puntos[idx].x, pFin.y - puntos[idx].y) < 15) {
+          idx--;
+        }
+        pRef = puntos[idx];
+      } else {
+        pRef = pInicio;
       }
-      const pRef = puntos[idxRef];
-      const angle = Math.atan2(pUlt.y - pRef.y, pUlt.x - pRef.x);
 
-      c.strokeStyle = color;
+      const angle = Math.atan2(pFin.y - pRef.y, pFin.x - pRef.x);
+      
+      // Proporciones basadas en la imagen de referencia
+      const bodyWidth = grosor * 1.6; // Ancho del cuerpo plano
+      const headLength = grosor * 2.2; // Longitud de la cabeza
+      const headWidth = grosor * 3.8;  // Las "alas" de la cabeza que sobresalen a los lados
+
+      // Calcular hasta dónde llega el cuerpo plano antes de unirse a la cabeza
+      const bodyEndX = pFin.x - (headLength * 0.6) * Math.cos(angle);
+      const bodyEndY = pFin.y - (headLength * 0.6) * Math.sin(angle);
+
       c.fillStyle = color;
-      c.lineWidth = grosor;
-      c.lineCap = 'butt';
-      c.lineJoin = 'round';
+      c.strokeStyle = color;
+      c.lineJoin = 'miter';
+      c.miterLimit = 3;
 
+      // 1. Dibujar el cuerpo ancho y plano (siguiendo la ruta si es "seguir" o directo si es "recta")
+      c.lineWidth = bodyWidth;
       c.beginPath();
       c.moveTo(puntos[0].x, puntos[0].y);
-      for (let i = 1; i <= idxRef; i++) {
+      for (let i = 1; i < puntos.length; i++) {
+        // Para el modo seguir, trazamos por toda la ruta hasta el punto de unión
         c.lineTo(puntos[i].x, puntos[i].y);
       }
-      const lineaFinX = pUlt.x - (headlen * 0.7) * Math.cos(angle);
-      const lineaFinY = pUlt.y - (headlen * 0.7) * Math.sin(angle);
-      c.lineTo(lineaFinX, lineaFinY);
+      c.lineTo(bodyEndX, bodyEndY);
       c.stroke();
 
+      // 2. Dibujar la cabeza de la flecha plana y ancha (estilo la foto)
+      // Vértice superior (punta)
+      const tipX = pFin.x;
+      const tipY = pFin.y;
+
+      // Esquina izquierda de la cabeza (sobresale más que el cuerpo)
+      const leftX = bodyEndX + (headWidth / 2) * Math.cos(angle - Math.PI / 2);
+      const leftY = bodyEndY + (headWidth / 2) * Math.sin(angle - Math.PI / 2);
+
+      // Esquina derecha de la cabeza
+      const rightX = bodyEndX + (headWidth / 2) * Math.cos(angle + Math.PI / 2);
+      const rightY = bodyEndY + (headWidth / 2) * Math.sin(angle + Math.PI / 2);
+
       c.beginPath();
-      c.moveTo(pUlt.x, pUlt.y);
-      c.lineTo(pUlt.x - headlen * Math.cos(angle - Math.PI / 7), pUlt.y - headlen * Math.sin(angle - Math.PI / 7));
-      c.lineTo(pUlt.x - headlen * Math.cos(angle + Math.PI / 7), pUlt.y - headlen * Math.sin(angle + Math.PI / 7));
+      c.moveTo(tipX, tipY);
+      c.lineTo(leftX, leftY);
+      c.lineTo(rightX, rightY);
       c.closePath();
       c.fill();
     }
@@ -500,18 +505,14 @@
       const mostrar = document.getElementById('cfg-mostrar').checked;
       if (!mostrar) return;
 
-      // Dibujar flechas
+      // Dibujar flechas con el nuevo estilo
       listaFlechas.forEach(f => {
-        if (f.modo === 'recta' && f.puntos.length >= 2) {
-          const p1 = f.puntos[0];
-          const p2 = f.puntos[f.puntos.length - 1];
-          dibujarFlechaRecta(ctx, p1.x, p1.y, p2.x, p2.y, f.color, f.grosor || 6);
-        } else if (f.modo === 'seguir' && f.puntos.length >= 2) {
-          dibujarFlechaSeguir(ctx, f.puntos, f.color, f.grosor || 6);
+        if (f.puntos && f.puntos.length >= 2) {
+          dibujarFlechaEstiloFoto(ctx, f.puntos, f.color, f.grosor || 20);
         }
       });
 
-      // Dibujar puntos de notas (Título visible por fuera, descripción oculta dentro del modal)
+      // Dibujar puntos de notas
       listaNotas.forEach(n => {
         ctx.beginPath();
         ctx.arc(n.x, n.y, 8, 0, Math.PI * 2);
